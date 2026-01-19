@@ -1,0 +1,22 @@
+{
+  "name": "ScreenshotLocaliser",
+  "id": "1595063898292153666",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "figma",
+    "figjam",
+    "slides",
+    "buzz"
+  ],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://generativelanguage.googleapis.com",
+      "https://unpkg.com"
+    ]
+  }
+}

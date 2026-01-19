@@ -1,0 +1,285 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: #f7f4ef;
+        color: #1f1f1f;
+      }
+      h2 {
+        margin: 0 0 12px;
+        font-weight: 600;
+        font-size: 18px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 12px 0 6px;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        border: 1px solid #d2c8bb;
+        border-radius: 8px;
+        font-size: 12px;
+        background: #fffaf2;
+      }
+      textarea {
+        min-height: 84px;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+      }
+      .row > div {
+        flex: 1;
+      }
+      .note {
+        font-size: 11px;
+        color: #5a5248;
+        margin-top: 6px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      button {
+        flex: 1;
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #1f1f1f;
+        color: #fff4e3;
+      }
+      button.secondary {
+        background: #e4dccf;
+        color: #3e352a;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-top: 16px;
+        padding: 10px 12px;
+        background: #fffaf2;
+        border: 1px solid #d2c8bb;
+        border-radius: 8px;
+        font-size: 12px;
+        min-height: 36px;
+      }
+      progress {
+        width: 100%;
+        height: 10px;
+        margin-top: 8px;
+      }
+      .log {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #5a5248;
+        max-height: 120px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Screenshot Localiser</h2>
+
+    <label for="apiKey">Gemini API key</label>
+    <input id="apiKey" type="password" placeholder="Paste your key" />
+
+    <label for="model">Model</label>
+    <input id="model" type="text" placeholder="gemini-2.5-flash" />
+
+    <label for="locales">Locales (comma or line separated)</label>
+    <textarea id="locales"></textarea>
+
+    <div class="row">
+      <div>
+        <label for="format">Export format</label>
+        <select id="format">
+          <option value="PNG">PNG</option>
+          <option value="JPG">JPG</option>
+        </select>
+      </div>
+      <div>
+        <label for="scale">Scale</label>
+        <input id="scale" type="number" min="1" max="4" step="0.5" value="1" />
+      </div>
+    </div>
+
+    <div class="note">Select the frames you want to localize before running.</div>
+
+    <div class="actions">
+      <button id="start" class="primary">Translate &amp; Export</button>
+      <button id="close" class="secondary">Close</button>
+    </div>
+
+    <div class="status" id="status">Ready.</div>
+    <progress id="progress" max="100" value="0"></progress>
+    <div class="log" id="log"></div>
+
+    <script>
+      const apiKeyEl = document.getElementById("apiKey");
+      const modelEl = document.getElementById("model");
+      const localesEl = document.getElementById("locales");
+      const formatEl = document.getElementById("format");
+      const scaleEl = document.getElementById("scale");
+      const statusEl = document.getElementById("status");
+      const progressEl = document.getElementById("progress");
+      const logEl = document.getElementById("log");
+      const startBtn = document.getElementById("start");
+      const closeBtn = document.getElementById("close");
+
+      let zip = null;
+      let fileCount = 0;
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function setProgress(value) {
+        if (typeof value === "number") {
+          progressEl.value = Math.max(0, Math.min(100, value));
+        }
+      }
+
+      function appendLog(text) {
+        if (!text) return;
+        logEl.textContent += (logEl.textContent ? "\n" : "") + text;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function getLocales() {
+        return localesEl.value
+          .split(/[,\\n]/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+      }
+
+      function setBusy(isBusy) {
+        startBtn.disabled = isBusy;
+        closeBtn.disabled = isBusy;
+      }
+
+      startBtn.onclick = () => {
+        const apiKey = apiKeyEl.value.trim();
+        const model = modelEl.value.trim() || "gemini-2.5-flash";
+        const locales = getLocales();
+        const exportFormat = formatEl.value;
+        const scale = parseFloat(scaleEl.value || "1");
+
+        if (!apiKey) {
+          setStatus("Please enter a Gemini API key.");
+          return;
+        }
+        if (!locales.length) {
+          setStatus("Please provide at least one locale.");
+          return;
+        }
+
+        setProgress(0);
+        logEl.textContent = "";
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: "start",
+              settings: { apiKey, model, locales, exportFormat, scale },
+            },
+          },
+          "*"
+        );
+      };
+
+      closeBtn.onclick = () => {
+        parent.postMessage({ pluginMessage: { type: "close" } }, "*");
+      };
+
+      window.onmessage = async (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg) return;
+
+        if (msg.type === "settings") {
+          apiKeyEl.value = msg.settings.apiKey || "";
+          modelEl.value = msg.settings.model || "gemini-2.5-flash";
+          localesEl.value = (msg.settings.locales || []).join(", ");
+          formatEl.value = msg.settings.exportFormat || "PNG";
+          scaleEl.value = msg.settings.scale || 1;
+        }
+
+        if (msg.type === "run-start") {
+          setBusy(true);
+          setStatus("Starting...");
+        }
+
+        if (msg.type === "progress") {
+          if (msg.message) setStatus(msg.message);
+          if (typeof msg.progress === "number") setProgress(msg.progress);
+        }
+
+        if (msg.type === "log") {
+          appendLog(msg.message);
+        }
+
+        if (msg.type === "zip-start") {
+          zip = new JSZip();
+          fileCount = 0;
+        }
+
+        if (msg.type === "zip-add" && zip) {
+          const bytes =
+            msg.bytes instanceof ArrayBuffer
+              ? new Uint8Array(msg.bytes)
+              : msg.bytes && msg.bytes.buffer
+              ? new Uint8Array(msg.bytes.buffer)
+              : msg.bytes;
+          if (bytes) {
+            zip.file(msg.path, bytes);
+            fileCount += 1;
+          }
+        }
+
+        if (msg.type === "zip-finish" && zip) {
+          setStatus("Building ZIP...");
+          const blob = await zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = msg.zipName || "localized_screenshots.zip";
+          link.click();
+          URL.revokeObjectURL(url);
+          setStatus(`Download ready (${fileCount} files).`);
+        }
+
+        if (msg.type === "error") {
+          setStatus(msg.message || "Something went wrong.");
+        }
+
+        if (msg.type === "run-end") {
+          setBusy(false);
+        }
+      };
+
+      parent.postMessage({ pluginMessage: { type: "get-settings" } }, "*");
+    </script>
+  </body>
+</html>
