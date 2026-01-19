@@ -127,6 +127,11 @@
       </div>
     </div>
 
+    <div class="row">
+      <label for="keep-duplicates">Keep translated duplicates</label>
+      <input id="keep-duplicates" type="checkbox" />
+    </div>
+
     <div class="note">Select the frames you want to localize before running.</div>
 
     <div class="actions">
@@ -144,6 +149,7 @@
       const localesEl = document.getElementById("locales");
       const formatEl = document.getElementById("format");
       const scaleEl = document.getElementById("scale");
+      const keepDuplicatesEl = document.getElementById("keep-duplicates");
       const statusEl = document.getElementById("status");
       const progressEl = document.getElementById("progress");
       const logEl = document.getElementById("log");
@@ -187,6 +193,7 @@
         const locales = getLocales();
         const exportFormat = formatEl.value;
         const scale = parseFloat(scaleEl.value || "1");
+        const keepDuplicates = keepDuplicatesEl.checked;
 
         if (!apiKey) {
           setStatus("Please enter a Gemini API key.");
@@ -203,7 +210,7 @@
           {
             pluginMessage: {
               type: "start",
-              settings: { apiKey, model, locales, exportFormat, scale },
+              settings: { apiKey, model, locales, exportFormat, scale, keepDuplicates },
             },
           },
           "*"
@@ -224,6 +231,7 @@
           localesEl.value = (msg.settings.locales || []).join(", ");
           formatEl.value = msg.settings.exportFormat || "PNG";
           scaleEl.value = msg.settings.scale || 1;
+          keepDuplicatesEl.checked = Boolean(msg.settings.keepDuplicates);
         }
 
         if (msg.type === "run-start") {

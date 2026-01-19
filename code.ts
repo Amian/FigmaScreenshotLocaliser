@@ -4,6 +4,7 @@ type PluginSettings = {
   locales: string[];
   exportFormat: "PNG" | "JPG";
   scale: number;
+  keepDuplicates: boolean;
 };
 
 const DEFAULT_LOCALES = [
@@ -342,7 +343,9 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
   const originalPage = figma.currentPage;
   const originalSelection = originalPage.selection;
   const tempPage = figma.createPage();
-  tempPage.name = "__localize_tmp__";
+  tempPage.name = settings.keepDuplicates
+    ? "Localized Screenshots"
+    : "__localize_tmp__";
 
   figma.ui.postMessage({ type: "zip-start" });
 
@@ -433,7 +436,9 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
           bytes,
         });
 
-        clone.remove();
+        if (!settings.keepDuplicates) {
+          clone.remove();
+        }
         completedUnits += 1;
       }
     }
@@ -449,7 +454,9 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
       progress: 100,
     });
   } finally {
-    tempPage.remove();
+    if (!settings.keepDuplicates) {
+      tempPage.remove();
+    }
     await figma.setCurrentPageAsync(originalPage);
     originalPage.selection = originalSelection;
   }
@@ -466,6 +473,8 @@ async function getStoredSettings(): Promise<PluginSettings> {
     locales: stored?.locales || DEFAULT_LOCALES,
     exportFormat: stored?.exportFormat || "PNG",
     scale: stored?.scale || 1,
+    keepDuplicates:
+      stored?.keepDuplicates === undefined ? false : stored.keepDuplicates,
   };
 }
 
@@ -491,6 +500,7 @@ figma.ui.onmessage = async (msg) => {
         .filter(Boolean),
       exportFormat: rawSettings.exportFormat === "JPG" ? "JPG" : "PNG",
       scale: rawSettings.scale,
+      keepDuplicates: Boolean(rawSettings.keepDuplicates),
     };
     try {
       await storeSettings(settings);

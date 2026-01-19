@@ -286,7 +286,9 @@ function runLocalization(settings) {
         const originalPage = figma.currentPage;
         const originalSelection = originalPage.selection;
         const tempPage = figma.createPage();
-        tempPage.name = "__localize_tmp__";
+        tempPage.name = settings.keepDuplicates
+            ? "Localized Screenshots"
+            : "__localize_tmp__";
         figma.ui.postMessage({ type: "zip-start" });
         try {
             for (const localeInfo of normalizedLocales) {
@@ -357,7 +359,9 @@ function runLocalization(settings) {
                         path,
                         bytes,
                     });
-                    clone.remove();
+                    if (!settings.keepDuplicates) {
+                        clone.remove();
+                    }
                     completedUnits += 1;
                 }
             }
@@ -372,7 +376,9 @@ function runLocalization(settings) {
             });
         }
         finally {
-            tempPage.remove();
+            if (!settings.keepDuplicates) {
+                tempPage.remove();
+            }
             yield figma.setCurrentPageAsync(originalPage);
             originalPage.selection = originalSelection;
         }
@@ -387,6 +393,9 @@ function getStoredSettings() {
             locales: (stored === null || stored === void 0 ? void 0 : stored.locales) || DEFAULT_LOCALES,
             exportFormat: (stored === null || stored === void 0 ? void 0 : stored.exportFormat) || "PNG",
             scale: (stored === null || stored === void 0 ? void 0 : stored.scale) || 1,
+            keepDuplicates: (stored === null || stored === void 0 ? void 0 : stored.keepDuplicates) === undefined
+                ? false
+                : stored.keepDuplicates,
         };
     });
 }
@@ -413,6 +422,7 @@ figma.ui.onmessage = (msg) => __awaiter(void 0, void 0, void 0, function* () {
                 .filter(Boolean),
             exportFormat: rawSettings.exportFormat === "JPG" ? "JPG" : "PNG",
             scale: rawSettings.scale,
+            keepDuplicates: Boolean(rawSettings.keepDuplicates),
         };
         try {
             yield storeSettings(settings);
