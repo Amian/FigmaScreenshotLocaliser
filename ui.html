@@ -200,7 +200,7 @@
 
       function getLocales() {
         return localesEl.value
-          .split(/[,\\n]/)
+          .split(/[,\n]/)
           .map((l) => l.trim())
           .filter(Boolean);
       }
