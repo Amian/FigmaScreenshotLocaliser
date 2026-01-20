@@ -344,11 +344,29 @@ function runLocalization(settings) {
         tempPage.name = settings.keepDuplicates
             ? "Localized Screenshots"
             : "__localize_tmp__";
+        const layoutBounds = settings.keepDuplicates
+            ? frames.reduce((acc, frame) => {
+                acc.minX = Math.min(acc.minX, frame.x);
+                acc.minY = Math.min(acc.minY, frame.y);
+                acc.maxX = Math.max(acc.maxX, frame.x + frame.width);
+                acc.maxY = Math.max(acc.maxY, frame.y + frame.height);
+                return acc;
+            }, {
+                minX: Number.POSITIVE_INFINITY,
+                minY: Number.POSITIVE_INFINITY,
+                maxX: Number.NEGATIVE_INFINITY,
+                maxY: Number.NEGATIVE_INFINITY,
+            })
+            : null;
+        const localeYOffset = settings.keepDuplicates && layoutBounds
+            ? layoutBounds.maxY - layoutBounds.minY + 120
+            : 0;
         if (settings.downloadZip) {
             figma.ui.postMessage({ type: "zip-start" });
         }
         try {
-            for (const localeInfo of normalizedLocales) {
+            for (let localeIndex = 0; localeIndex < normalizedLocales.length; localeIndex += 1) {
+                const localeInfo = normalizedLocales[localeIndex];
                 if (localeInfo.normalized !== localeInfo.raw) {
                     figma.ui.postMessage({
                         type: "log",
@@ -380,6 +398,10 @@ function runLocalization(settings) {
                     const clone = data.frame.clone();
                     tempPage.appendChild(clone);
                     clone.name = `${data.frame.name} (${localeInfo.normalized})`;
+                    if (settings.keepDuplicates && localeYOffset) {
+                        clone.x = data.frame.x;
+                        clone.y = data.frame.y + localeYOffset * localeIndex;
+                    }
                     const cloneTextNodes = collectTextNodes(clone);
                     const length = Math.min(cloneTextNodes.length, data.texts.length);
                     if (cloneTextNodes.length !== data.texts.length) {
