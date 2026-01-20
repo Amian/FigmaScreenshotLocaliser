@@ -93,30 +93,80 @@ function loadFontsForNode(node) {
         }
     });
 }
-function applyTextWithShrink(node, text) {
+function applyTextWithShrink(node, text, sourceText, allowShrink) {
     return __awaiter(this, void 0, void 0, function* () {
         yield loadFontsForNode(node);
         const originalAutoResize = node.textAutoResize;
+        const originalX = node.x;
+        const originalY = node.y;
         const originalWidth = node.width;
         const originalHeight = node.height;
-        node.characters = text;
-        if (originalAutoResize !== "NONE") {
-            node.textAutoResize = originalAutoResize;
-            return { shrunk: false, skipped: false };
-        }
-        if (typeof node.fontSize !== "number") {
-            node.textAutoResize = originalAutoResize;
+        const finalize = () => {
+            node.textAutoResize = "NONE";
             node.resizeWithoutConstraints(originalWidth, originalHeight);
+            node.x = originalX;
+            node.y = originalY;
+            node.textAutoResize = originalAutoResize;
+        };
+        node.characters = text;
+        if (typeof node.fontSize !== "number") {
+            finalize();
             return { shrunk: false, skipped: true };
         }
+        if (!allowShrink) {
+            finalize();
+            return { shrunk: false, skipped: false };
+        }
+        const preferMultiline = originalAutoResize === "HEIGHT" ||
+            sourceText.includes("\n") ||
+            text.includes("\n");
         const originalFontSize = node.fontSize;
         const originalLineHeight = node.lineHeight;
         const originalLetterSpacing = node.letterSpacing;
         let shrunk = false;
         for (let i = 0; i < 3; i++) {
+            if (preferMultiline) {
+                // Measure wrapped height at the original width.
+                node.textAutoResize = "HEIGHT";
+                node.resizeWithoutConstraints(originalWidth, originalHeight);
+                const wrappedHeight = node.height;
+                // Measure natural width for single-line overflow (e.g., long words).
+                node.textAutoResize = "WIDTH_AND_HEIGHT";
+                const naturalWidth = node.width;
+                const needsShrink = wrappedHeight > originalHeight + 0.1 ||
+                    naturalWidth > originalWidth + 0.1;
+                if (!needsShrink) {
+                    break;
+                }
+                const scale = Math.min(originalWidth / naturalWidth, originalHeight / wrappedHeight);
+                const currentSize = node.fontSize;
+                const nextSize = Math.max(1, Math.floor(currentSize * scale));
+                if (nextSize === node.fontSize) {
+                    break;
+                }
+                // Keep the original width so line wrapping stays multiline.
+                node.textAutoResize = "HEIGHT";
+                node.resizeWithoutConstraints(originalWidth, originalHeight);
+                node.fontSize = nextSize;
+                if (originalLineHeight !== figma.mixed &&
+                    originalLineHeight.unit === "PIXELS") {
+                    node.lineHeight = {
+                        unit: "PIXELS",
+                        value: originalLineHeight.value * (nextSize / originalFontSize),
+                    };
+                }
+                if (originalLetterSpacing !== figma.mixed &&
+                    originalLetterSpacing.unit === "PIXELS") {
+                    node.letterSpacing = {
+                        unit: "PIXELS",
+                        value: originalLetterSpacing.value * (nextSize / originalFontSize),
+                    };
+                }
+                shrunk = true;
+                continue;
+            }
             node.textAutoResize = "WIDTH_AND_HEIGHT";
-            const needsShrink = node.width > originalWidth + 0.1 ||
-                node.height > originalHeight + 0.1;
+            const needsShrink = node.width > originalWidth + 0.1 || node.height > originalHeight + 0.1;
             if (!needsShrink) {
                 break;
             }
@@ -143,8 +193,7 @@ function applyTextWithShrink(node, text) {
             }
             shrunk = true;
         }
-        node.textAutoResize = originalAutoResize;
-        node.resizeWithoutConstraints(originalWidth, originalHeight);
+        finalize();
         return { shrunk, skipped: false };
     });
 }
@@ -256,6 +305,12 @@ function runLocalization(settings) {
         if (!settings.locales.length) {
             throw new Error("No locales provided.");
         }
+        if (!settings.downloadZip && !settings.keepDuplicates) {
+            figma.ui.postMessage({
+                type: "log",
+                message: "Download ZIP is off and 'Keep translated duplicates' is off, so outputs will not be saved.",
+            });
+        }
         const selection = figma.currentPage.selection;
         const frames = selection.filter((node) => node.type === "FRAME");
         if (!frames.length) {
@@ -289,7 +344,9 @@ function runLocalization(settings) {
         tempPage.name = settings.keepDuplicates
             ? "Localized Screenshots"
             : "__localize_tmp__";
-        figma.ui.postMessage({ type: "zip-start" });
+        if (settings.downloadZip) {
+            figma.ui.postMessage({ type: "zip-start" });
+        }
         try {
             for (const localeInfo of normalizedLocales) {
                 if (localeInfo.normalized !== localeInfo.raw) {
@@ -334,7 +391,7 @@ function runLocalization(settings) {
                     for (let i = 0; i < length; i++) {
                         const sourceText = data.texts[i];
                         const translated = (_a = translations.get(sourceText)) !== null && _a !== void 0 ? _a : sourceText;
-                        const { shrunk, skipped } = yield applyTextWithShrink(cloneTextNodes[i], translated);
+                        const { shrunk, skipped } = yield applyTextWithShrink(cloneTextNodes[i], translated, sourceText, settings.shrinkText);
                         if (skipped) {
                             figma.ui.postMessage({
                                 type: "log",
@@ -348,27 +405,31 @@ function runLocalization(settings) {
                             });
                         }
                     }
-                    const bytes = yield clone.exportAsync({
-                        format: exportFormat,
-                        constraint: { type: "SCALE", value: scale },
-                    });
-                    const fileName = `${sanitizeFilename(data.frame.name)}.${exportFormat === "PNG" ? "png" : "jpg"}`;
-                    const path = `${localeInfo.normalized}/${fileName}`;
-                    figma.ui.postMessage({
-                        type: "zip-add",
-                        path,
-                        bytes,
-                    });
+                    if (settings.downloadZip) {
+                        const bytes = yield clone.exportAsync({
+                            format: exportFormat,
+                            constraint: { type: "SCALE", value: scale },
+                        });
+                        const fileName = `${sanitizeFilename(data.frame.name)}.${exportFormat === "PNG" ? "png" : "jpg"}`;
+                        const path = `${localeInfo.normalized}/${fileName}`;
+                        figma.ui.postMessage({
+                            type: "zip-add",
+                            path,
+                            bytes,
+                        });
+                    }
                     if (!settings.keepDuplicates) {
                         clone.remove();
                     }
                     completedUnits += 1;
                 }
             }
-            figma.ui.postMessage({
-                type: "zip-finish",
-                zipName: "localized_screenshots.zip",
-            });
+            if (settings.downloadZip) {
+                figma.ui.postMessage({
+                    type: "zip-finish",
+                    zipName: "localized_screenshots.zip",
+                });
+            }
             figma.ui.postMessage({
                 type: "progress",
                 message: "Done.",
@@ -393,9 +454,9 @@ function getStoredSettings() {
             locales: (stored === null || stored === void 0 ? void 0 : stored.locales) || DEFAULT_LOCALES,
             exportFormat: (stored === null || stored === void 0 ? void 0 : stored.exportFormat) || "PNG",
             scale: (stored === null || stored === void 0 ? void 0 : stored.scale) || 1,
-            keepDuplicates: (stored === null || stored === void 0 ? void 0 : stored.keepDuplicates) === undefined
-                ? false
-                : stored.keepDuplicates,
+            keepDuplicates: (stored === null || stored === void 0 ? void 0 : stored.keepDuplicates) === undefined ? false : stored.keepDuplicates,
+            shrinkText: (stored === null || stored === void 0 ? void 0 : stored.shrinkText) === undefined ? true : stored.shrinkText,
+            downloadZip: (stored === null || stored === void 0 ? void 0 : stored.downloadZip) === undefined ? true : stored.downloadZip,
         };
     });
 }
@@ -423,6 +484,8 @@ figma.ui.onmessage = (msg) => __awaiter(void 0, void 0, void 0, function* () {
             exportFormat: rawSettings.exportFormat === "JPG" ? "JPG" : "PNG",
             scale: rawSettings.scale,
             keepDuplicates: Boolean(rawSettings.keepDuplicates),
+            shrinkText: rawSettings.shrinkText === undefined ? true : Boolean(rawSettings.shrinkText),
+            downloadZip: rawSettings.downloadZip === undefined ? true : Boolean(rawSettings.downloadZip),
         };
         try {
             yield storeSettings(settings);

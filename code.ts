@@ -5,6 +5,8 @@ type PluginSettings = {
   exportFormat: "PNG" | "JPG";
   scale: number;
   keepDuplicates: boolean;
+  shrinkText: boolean;
+  downloadZip: boolean;
 };
 
 const DEFAULT_LOCALES = [
@@ -100,25 +102,40 @@ async function loadFontsForNode(node: TextNode): Promise<void> {
 
 async function applyTextWithShrink(
   node: TextNode,
-  text: string
+  text: string,
+  sourceText: string,
+  allowShrink: boolean
 ): Promise<{ shrunk: boolean; skipped: boolean }> {
   await loadFontsForNode(node);
   const originalAutoResize = node.textAutoResize;
+  const originalX = node.x;
+  const originalY = node.y;
   const originalWidth = node.width;
   const originalHeight = node.height;
+  const finalize = () => {
+    node.textAutoResize = "NONE";
+    node.resizeWithoutConstraints(originalWidth, originalHeight);
+    node.x = originalX;
+    node.y = originalY;
+    node.textAutoResize = originalAutoResize;
+  };
 
   node.characters = text;
 
-  if (originalAutoResize !== "NONE") {
-    node.textAutoResize = originalAutoResize;
+  if (typeof node.fontSize !== "number") {
+    finalize();
+    return { shrunk: false, skipped: true };
+  }
+
+  if (!allowShrink) {
+    finalize();
     return { shrunk: false, skipped: false };
   }
 
-  if (typeof node.fontSize !== "number") {
-    node.textAutoResize = originalAutoResize;
-    node.resizeWithoutConstraints(originalWidth, originalHeight);
-    return { shrunk: false, skipped: true };
-  }
+  const preferMultiline =
+    originalAutoResize === "HEIGHT" ||
+    sourceText.includes("\n") ||
+    text.includes("\n");
 
   const originalFontSize = node.fontSize as number;
   const originalLineHeight = node.lineHeight;
@@ -127,10 +144,62 @@ async function applyTextWithShrink(
   let shrunk = false;
 
   for (let i = 0; i < 3; i++) {
+    if (preferMultiline) {
+      // Measure wrapped height at the original width.
+      node.textAutoResize = "HEIGHT";
+      node.resizeWithoutConstraints(originalWidth, originalHeight);
+      const wrappedHeight = node.height;
+
+      // Measure natural width for single-line overflow (e.g., long words).
+      node.textAutoResize = "WIDTH_AND_HEIGHT";
+      const naturalWidth = node.width;
+
+      const needsShrink =
+        wrappedHeight > originalHeight + 0.1 ||
+        naturalWidth > originalWidth + 0.1;
+      if (!needsShrink) {
+        break;
+      }
+
+      const scale = Math.min(
+        originalWidth / naturalWidth,
+        originalHeight / wrappedHeight
+      );
+      const currentSize = node.fontSize as number;
+      const nextSize = Math.max(1, Math.floor(currentSize * scale));
+      if (nextSize === node.fontSize) {
+        break;
+      }
+
+      // Keep the original width so line wrapping stays multiline.
+      node.textAutoResize = "HEIGHT";
+      node.resizeWithoutConstraints(originalWidth, originalHeight);
+      node.fontSize = nextSize;
+      if (
+        originalLineHeight !== figma.mixed &&
+        originalLineHeight.unit === "PIXELS"
+      ) {
+        node.lineHeight = {
+          unit: "PIXELS",
+          value: originalLineHeight.value * (nextSize / originalFontSize),
+        };
+      }
+      if (
+        originalLetterSpacing !== figma.mixed &&
+        originalLetterSpacing.unit === "PIXELS"
+      ) {
+        node.letterSpacing = {
+          unit: "PIXELS",
+          value: originalLetterSpacing.value * (nextSize / originalFontSize),
+        };
+      }
+      shrunk = true;
+      continue;
+    }
+
     node.textAutoResize = "WIDTH_AND_HEIGHT";
     const needsShrink =
-      node.width > originalWidth + 0.1 ||
-      node.height > originalHeight + 0.1;
+      node.width > originalWidth + 0.1 || node.height > originalHeight + 0.1;
     if (!needsShrink) {
       break;
     }
@@ -166,8 +235,7 @@ async function applyTextWithShrink(
     shrunk = true;
   }
 
-  node.textAutoResize = originalAutoResize;
-  node.resizeWithoutConstraints(originalWidth, originalHeight);
+  finalize();
   return { shrunk, skipped: false };
 }
 
@@ -302,6 +370,13 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
   if (!settings.locales.length) {
     throw new Error("No locales provided.");
   }
+  if (!settings.downloadZip && !settings.keepDuplicates) {
+    figma.ui.postMessage({
+      type: "log",
+      message:
+        "Download ZIP is off and 'Keep translated duplicates' is off, so outputs will not be saved.",
+    });
+  }
   const selection = figma.currentPage.selection;
   const frames = selection.filter(
     (node): node is FrameNode => node.type === "FRAME"
@@ -347,7 +422,9 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
     ? "Localized Screenshots"
     : "__localize_tmp__";
 
-  figma.ui.postMessage({ type: "zip-start" });
+  if (settings.downloadZip) {
+    figma.ui.postMessage({ type: "zip-start" });
+  }
 
   try {
     for (const localeInfo of normalizedLocales) {
@@ -406,7 +483,9 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
           const translated = translations.get(sourceText) ?? sourceText;
           const { shrunk, skipped } = await applyTextWithShrink(
             cloneTextNodes[i],
-            translated
+            translated,
+            sourceText,
+            settings.shrinkText
           );
           if (skipped) {
             figma.ui.postMessage({
@@ -421,20 +500,22 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
           }
         }
 
-        const bytes = await clone.exportAsync({
-          format: exportFormat,
-          constraint: { type: "SCALE", value: scale },
-        });
-        const fileName = `${sanitizeFilename(data.frame.name)}.${
-          exportFormat === "PNG" ? "png" : "jpg"
-        }`;
-        const path = `${localeInfo.normalized}/${fileName}`;
+        if (settings.downloadZip) {
+          const bytes = await clone.exportAsync({
+            format: exportFormat,
+            constraint: { type: "SCALE", value: scale },
+          });
+          const fileName = `${sanitizeFilename(data.frame.name)}.${
+            exportFormat === "PNG" ? "png" : "jpg"
+          }`;
+          const path = `${localeInfo.normalized}/${fileName}`;
 
-        figma.ui.postMessage({
-          type: "zip-add",
-          path,
-          bytes,
-        });
+          figma.ui.postMessage({
+            type: "zip-add",
+            path,
+            bytes,
+          });
+        }
 
         if (!settings.keepDuplicates) {
           clone.remove();
@@ -443,10 +524,12 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
       }
     }
 
-    figma.ui.postMessage({
-      type: "zip-finish",
-      zipName: "localized_screenshots.zip",
-    });
+    if (settings.downloadZip) {
+      figma.ui.postMessage({
+        type: "zip-finish",
+        zipName: "localized_screenshots.zip",
+      });
+    }
 
     figma.ui.postMessage({
       type: "progress",
@@ -475,6 +558,9 @@ async function getStoredSettings(): Promise<PluginSettings> {
     scale: stored?.scale || 1,
     keepDuplicates:
       stored?.keepDuplicates === undefined ? false : stored.keepDuplicates,
+    shrinkText: stored?.shrinkText === undefined ? true : stored.shrinkText,
+    downloadZip:
+      stored?.downloadZip === undefined ? true : stored.downloadZip,
   };
 }
 
@@ -501,6 +587,10 @@ figma.ui.onmessage = async (msg) => {
       exportFormat: rawSettings.exportFormat === "JPG" ? "JPG" : "PNG",
       scale: rawSettings.scale,
       keepDuplicates: Boolean(rawSettings.keepDuplicates),
+      shrinkText:
+        rawSettings.shrinkText === undefined ? true : Boolean(rawSettings.shrinkText),
+      downloadZip:
+        rawSettings.downloadZip === undefined ? true : Boolean(rawSettings.downloadZip),
     };
     try {
       await storeSettings(settings);

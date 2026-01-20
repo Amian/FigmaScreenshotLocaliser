@@ -131,6 +131,14 @@
       <label for="keep-duplicates">Keep translated duplicates</label>
       <input id="keep-duplicates" type="checkbox" />
     </div>
+    <div class="row">
+      <label for="shrink-text">Shrink text to fit</label>
+      <input id="shrink-text" type="checkbox" checked />
+    </div>
+    <div class="row">
+      <label for="download-zip">Download ZIP</label>
+      <input id="download-zip" type="checkbox" checked />
+    </div>
 
     <div class="note">Select the frames you want to localize before running.</div>
 
@@ -150,6 +158,8 @@
       const formatEl = document.getElementById("format");
       const scaleEl = document.getElementById("scale");
       const keepDuplicatesEl = document.getElementById("keep-duplicates");
+      const shrinkTextEl = document.getElementById("shrink-text");
+      const downloadZipEl = document.getElementById("download-zip");
       const statusEl = document.getElementById("status");
       const progressEl = document.getElementById("progress");
       const logEl = document.getElementById("log");
@@ -158,6 +168,7 @@
 
       let zip = null;
       let fileCount = 0;
+      let downloadZipEnabled = true;
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -194,6 +205,9 @@
         const exportFormat = formatEl.value;
         const scale = parseFloat(scaleEl.value || "1");
         const keepDuplicates = keepDuplicatesEl.checked;
+        const shrinkText = shrinkTextEl.checked;
+        const downloadZip = downloadZipEl.checked;
+        downloadZipEnabled = downloadZip;
 
         if (!apiKey) {
           setStatus("Please enter a Gemini API key.");
@@ -210,7 +224,16 @@
           {
             pluginMessage: {
               type: "start",
-              settings: { apiKey, model, locales, exportFormat, scale, keepDuplicates },
+              settings: {
+                apiKey,
+                model,
+                locales,
+                exportFormat,
+                scale,
+                keepDuplicates,
+                shrinkText,
+                downloadZip,
+              },
             },
           },
           "*"
@@ -232,11 +255,19 @@
           formatEl.value = msg.settings.exportFormat || "PNG";
           scaleEl.value = msg.settings.scale || 1;
           keepDuplicatesEl.checked = Boolean(msg.settings.keepDuplicates);
+          shrinkTextEl.checked =
+            msg.settings.shrinkText === undefined ? true : Boolean(msg.settings.shrinkText);
+          downloadZipEl.checked =
+            msg.settings.downloadZip === undefined ? true : Boolean(msg.settings.downloadZip);
         }
 
         if (msg.type === "run-start") {
           setBusy(true);
           setStatus("Starting...");
+          if (!downloadZipEnabled) {
+            zip = null;
+            fileCount = 0;
+          }
         }
 
         if (msg.type === "progress") {
@@ -249,11 +280,12 @@
         }
 
         if (msg.type === "zip-start") {
+          if (!downloadZipEnabled) return;
           zip = new JSZip();
           fileCount = 0;
         }
 
-        if (msg.type === "zip-add" && zip) {
+        if (msg.type === "zip-add" && zip && downloadZipEnabled) {
           const bytes =
             msg.bytes instanceof ArrayBuffer
               ? new Uint8Array(msg.bytes)
@@ -266,7 +298,7 @@
           }
         }
 
-        if (msg.type === "zip-finish" && zip) {
+        if (msg.type === "zip-finish" && zip && downloadZipEnabled) {
           setStatus("Building ZIP...");
           const blob = await zip.generateAsync({ type: "blob" });
           const url = URL.createObjectURL(blob);
