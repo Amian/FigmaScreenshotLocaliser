@@ -136,6 +136,17 @@
       <input id="shrink-text" type="checkbox" checked />
     </div>
     <div class="row">
+      <label for="min-shrink-scale">Minimum shrink scale</label>
+      <input
+        id="min-shrink-scale"
+        type="number"
+        min="0.1"
+        max="1"
+        step="0.05"
+        value="0.7"
+      />
+    </div>
+    <div class="row">
       <label for="download-zip">Download ZIP</label>
       <input id="download-zip" type="checkbox" checked />
     </div>
@@ -159,6 +170,7 @@
       const scaleEl = document.getElementById("scale");
       const keepDuplicatesEl = document.getElementById("keep-duplicates");
       const shrinkTextEl = document.getElementById("shrink-text");
+      const minShrinkScaleEl = document.getElementById("min-shrink-scale");
       const downloadZipEl = document.getElementById("download-zip");
       const statusEl = document.getElementById("status");
       const progressEl = document.getElementById("progress");
@@ -198,6 +210,10 @@
         closeBtn.disabled = isBusy;
       }
 
+      function updateShrinkControls() {
+        minShrinkScaleEl.disabled = !shrinkTextEl.checked;
+      }
+
       startBtn.onclick = () => {
         const apiKey = apiKeyEl.value.trim();
         const model = modelEl.value.trim() || "gemini-2.5-flash";
@@ -206,6 +222,10 @@
         const scale = parseFloat(scaleEl.value || "1");
         const keepDuplicates = keepDuplicatesEl.checked;
         const shrinkText = shrinkTextEl.checked;
+        const rawMinShrinkScale = parseFloat(minShrinkScaleEl.value || "0.7");
+        const minShrinkScale = Number.isFinite(rawMinShrinkScale)
+          ? Math.min(1, Math.max(0.1, rawMinShrinkScale))
+          : 0.7;
         const downloadZip = downloadZipEl.checked;
         downloadZipEnabled = downloadZip;
 
@@ -232,6 +252,7 @@
                 scale,
                 keepDuplicates,
                 shrinkText,
+                minShrinkScale,
                 downloadZip,
               },
             },
@@ -257,8 +278,13 @@
           keepDuplicatesEl.checked = Boolean(msg.settings.keepDuplicates);
           shrinkTextEl.checked =
             msg.settings.shrinkText === undefined ? true : Boolean(msg.settings.shrinkText);
+          minShrinkScaleEl.value =
+            typeof msg.settings.minShrinkScale === "number"
+              ? msg.settings.minShrinkScale
+              : 0.7;
           downloadZipEl.checked =
             msg.settings.downloadZip === undefined ? true : Boolean(msg.settings.downloadZip);
+          updateShrinkControls();
         }
 
         if (msg.type === "run-start") {
@@ -319,6 +345,7 @@
         }
       };
 
+      shrinkTextEl.onchange = updateShrinkControls;
       parent.postMessage({ pluginMessage: { type: "get-settings" } }, "*");
     </script>
   </body>

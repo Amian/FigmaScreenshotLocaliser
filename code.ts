@@ -7,6 +7,7 @@ type PluginSettings = {
   keepDuplicates: boolean;
   shrinkText: boolean;
   downloadZip: boolean;
+  minShrinkScale: number;
 };
 
 const DEFAULT_LOCALES = [
@@ -53,7 +54,7 @@ const LOCALE_ALIASES: Record<string, string> = {
 const SETTINGS_KEY = "screenshot-localiser-settings";
 const loadedFonts = new Set<string>();
 
-figma.showUI(__html__, { width: 420, height: 620 });
+figma.showUI(__html__, { width: 420, height: 660 });
 
 function sanitizeFilename(name: string): string {
   const cleaned = name.replace(/[\\/:*?"<>|]+/g, "-").trim();
@@ -104,7 +105,8 @@ async function applyTextWithShrink(
   node: TextNode,
   text: string,
   sourceText: string,
-  allowShrink: boolean
+  allowShrink: boolean,
+  minScaleInput: number
 ): Promise<{ shrunk: boolean; skipped: boolean }> {
   await loadFontsForNode(node);
   const originalAutoResize = node.textAutoResize;
@@ -132,14 +134,18 @@ async function applyTextWithShrink(
     return { shrunk: false, skipped: false };
   }
 
+  const originalFontSize = node.fontSize as number;
+  const originalLineHeight = node.lineHeight;
+  const originalLetterSpacing = node.letterSpacing;
+  const minScaleRaw =
+    Number.isFinite(minScaleInput) && minScaleInput > 0 ? minScaleInput : 0.7;
+  const minScale = Math.min(1, Math.max(0.1, minScaleRaw));
+  const minFontSize = Math.max(1, Math.floor(originalFontSize * minScale));
+
   const preferMultiline =
     originalAutoResize === "HEIGHT" ||
     sourceText.includes("\n") ||
     text.includes("\n");
-
-  const originalFontSize = node.fontSize as number;
-  const originalLineHeight = node.lineHeight;
-  const originalLetterSpacing = node.letterSpacing;
 
   let shrunk = false;
 
@@ -166,8 +172,8 @@ async function applyTextWithShrink(
         originalHeight / wrappedHeight
       );
       const currentSize = node.fontSize as number;
-      const nextSize = Math.max(1, Math.floor(currentSize * scale));
-      if (nextSize === node.fontSize) {
+      const nextSize = Math.max(minFontSize, Math.floor(currentSize * scale));
+      if (nextSize >= currentSize) {
         break;
       }
 
@@ -209,8 +215,8 @@ async function applyTextWithShrink(
       originalHeight / node.height
     );
     const currentSize = node.fontSize as number;
-    const nextSize = Math.max(1, Math.floor(currentSize * scale));
-    if (nextSize === node.fontSize) {
+    const nextSize = Math.max(minFontSize, Math.floor(currentSize * scale));
+    if (nextSize >= currentSize) {
       break;
     }
     node.fontSize = nextSize;
@@ -511,7 +517,8 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
             cloneTextNodes[i],
             translated,
             sourceText,
-            settings.shrinkText
+            settings.shrinkText,
+            settings.minShrinkScale
           );
           if (skipped) {
             figma.ui.postMessage({
@@ -587,6 +594,8 @@ async function getStoredSettings(): Promise<PluginSettings> {
     shrinkText: stored?.shrinkText === undefined ? true : stored.shrinkText,
     downloadZip:
       stored?.downloadZip === undefined ? true : stored.downloadZip,
+    minShrinkScale:
+      stored?.minShrinkScale === undefined ? 0.7 : stored.minShrinkScale,
   };
 }
 
@@ -617,6 +626,10 @@ figma.ui.onmessage = async (msg) => {
         rawSettings.shrinkText === undefined ? true : Boolean(rawSettings.shrinkText),
       downloadZip:
         rawSettings.downloadZip === undefined ? true : Boolean(rawSettings.downloadZip),
+      minShrinkScale:
+        typeof rawSettings.minShrinkScale === "number"
+          ? Math.min(1, Math.max(0.1, rawSettings.minShrinkScale))
+          : 0.7,
     };
     try {
       await storeSettings(settings);
