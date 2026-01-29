@@ -56,6 +56,16 @@ const loadedFonts = new Set<string>();
 
 figma.showUI(__html__, { width: 420, height: 660 });
 
+async function loadFonts(fonts: Iterable<FontName>): Promise<void> {
+  for (const font of fonts) {
+    const key = JSON.stringify(font);
+    if (!loadedFonts.has(key)) {
+      await figma.loadFontAsync(font);
+      loadedFonts.add(key);
+    }
+  }
+}
+
 function sanitizeFilename(name: string): string {
   const cleaned = name.replace(/[\\/:*?"<>|]+/g, "-").trim();
   return cleaned.length ? cleaned : "frame";
@@ -85,6 +95,17 @@ function collectTextNodes(root: SceneNode): TextNode[] {
   return nodes;
 }
 
+function isWithinInstance(node: SceneNode): boolean {
+  let parent = node.parent;
+  while (parent) {
+    if (parent.type === "INSTANCE") {
+      return true;
+    }
+    parent = parent.parent;
+  }
+  return false;
+}
+
 async function loadFontsForNode(node: TextNode): Promise<void> {
   const segments = node.getStyledTextSegments(["fontName"]);
   const fonts = new Map<string, FontName>();
@@ -92,13 +113,15 @@ async function loadFontsForNode(node: TextNode): Promise<void> {
     const fontName = segment.fontName as FontName;
     fonts.set(JSON.stringify(fontName), fontName);
   }
-  for (const font of fonts.values()) {
-    const key = JSON.stringify(font);
-    if (!loadedFonts.has(key)) {
-      await figma.loadFontAsync(font);
-      loadedFonts.add(key);
-    }
+  await loadFonts(fonts.values());
+}
+
+async function loadFontsForText(node: TextNode): Promise<void> {
+  if (!node.characters.length) {
+    return;
   }
+  const fonts = node.getRangeAllFontNames(0, node.characters.length);
+  await loadFonts(fonts);
 }
 
 async function applyTextWithShrink(
@@ -114,14 +137,19 @@ async function applyTextWithShrink(
   const originalY = node.y;
   const originalWidth = node.width;
   const originalHeight = node.height;
+  const canSetPosition = !isWithinInstance(node);
   const finalize = () => {
     node.textAutoResize = "NONE";
     node.resizeWithoutConstraints(originalWidth, originalHeight);
-    node.x = originalX;
-    node.y = originalY;
+    if (canSetPosition) {
+      node.x = originalX;
+      node.y = originalY;
+    }
     node.textAutoResize = originalAutoResize;
   };
 
+  node.characters = text;
+  await loadFontsForText(node);
   node.characters = text;
 
   if (typeof node.fontSize !== "number") {

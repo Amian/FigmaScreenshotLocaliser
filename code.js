@@ -50,6 +50,17 @@ const LOCALE_ALIASES = {
 const SETTINGS_KEY = "screenshot-localiser-settings";
 const loadedFonts = new Set();
 figma.showUI(__html__, { width: 420, height: 660 });
+function loadFonts(fonts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        for (const font of fonts) {
+            const key = JSON.stringify(font);
+            if (!loadedFonts.has(key)) {
+                yield figma.loadFontAsync(font);
+                loadedFonts.add(key);
+            }
+        }
+    });
+}
 function sanitizeFilename(name) {
     const cleaned = name.replace(/[\\/:*?"<>|]+/g, "-").trim();
     return cleaned.length ? cleaned : "frame";
@@ -76,6 +87,16 @@ function collectTextNodes(root) {
     visit(root);
     return nodes;
 }
+function isWithinInstance(node) {
+    let parent = node.parent;
+    while (parent) {
+        if (parent.type === "INSTANCE") {
+            return true;
+        }
+        parent = parent.parent;
+    }
+    return false;
+}
 function loadFontsForNode(node) {
     return __awaiter(this, void 0, void 0, function* () {
         const segments = node.getStyledTextSegments(["fontName"]);
@@ -84,13 +105,16 @@ function loadFontsForNode(node) {
             const fontName = segment.fontName;
             fonts.set(JSON.stringify(fontName), fontName);
         }
-        for (const font of fonts.values()) {
-            const key = JSON.stringify(font);
-            if (!loadedFonts.has(key)) {
-                yield figma.loadFontAsync(font);
-                loadedFonts.add(key);
-            }
+        yield loadFonts(fonts.values());
+    });
+}
+function loadFontsForText(node) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!node.characters.length) {
+            return;
         }
+        const fonts = node.getRangeAllFontNames(0, node.characters.length);
+        yield loadFonts(fonts);
     });
 }
 function applyTextWithShrink(node, text, sourceText, allowShrink, minScaleInput) {
@@ -101,13 +125,18 @@ function applyTextWithShrink(node, text, sourceText, allowShrink, minScaleInput)
         const originalY = node.y;
         const originalWidth = node.width;
         const originalHeight = node.height;
+        const canSetPosition = !isWithinInstance(node);
         const finalize = () => {
             node.textAutoResize = "NONE";
             node.resizeWithoutConstraints(originalWidth, originalHeight);
-            node.x = originalX;
-            node.y = originalY;
+            if (canSetPosition) {
+                node.x = originalX;
+                node.y = originalY;
+            }
             node.textAutoResize = originalAutoResize;
         };
+        node.characters = text;
+        yield loadFontsForText(node);
         node.characters = text;
         if (typeof node.fontSize !== "number") {
             finalize();
