@@ -47,6 +47,11 @@ const LOCALE_ALIASES = {
     pt: "pt-PT",
     ca: "ca-ES",
 };
+const LOCALE_FONT_OVERRIDES = {
+    ar: { family: "Arial", style: "Regular" },
+    he: { family: "Arial", style: "Regular" },
+};
+const RTL_LOCALES = new Set(["ar", "he"]);
 const SETTINGS_KEY = "screenshot-localiser-settings";
 const loadedFonts = new Set();
 figma.showUI(__html__, { width: 420, height: 660 });
@@ -97,6 +102,14 @@ function isWithinInstance(node) {
     }
     return false;
 }
+function forceTextLayout(node, originalWidth, originalHeight, originalAutoResize) {
+    node.textAutoResize = "WIDTH_AND_HEIGHT";
+    node.characters = node.characters;
+    node.textAutoResize = originalAutoResize;
+    if (originalAutoResize === "NONE" || originalAutoResize === "HEIGHT") {
+        node.resizeWithoutConstraints(originalWidth, originalHeight);
+    }
+}
 function loadFontsForNode(node) {
     return __awaiter(this, void 0, void 0, function* () {
         const segments = node.getStyledTextSegments(["fontName"]);
@@ -117,7 +130,7 @@ function loadFontsForText(node) {
         yield loadFonts(fonts);
     });
 }
-function applyTextWithShrink(node, text, sourceText, allowShrink, minScaleInput) {
+function applyTextWithShrink(node, text, sourceText, allowShrink, minScaleInput, locale) {
     return __awaiter(this, void 0, void 0, function* () {
         yield loadFontsForNode(node);
         const originalAutoResize = node.textAutoResize;
@@ -125,7 +138,9 @@ function applyTextWithShrink(node, text, sourceText, allowShrink, minScaleInput)
         const originalY = node.y;
         const originalWidth = node.width;
         const originalHeight = node.height;
+        const originalTextAlign = node.textAlignHorizontal;
         const canSetPosition = !isWithinInstance(node);
+        const rtlLocale = isRtlLocale(locale);
         const finalize = () => {
             node.textAutoResize = "NONE";
             node.resizeWithoutConstraints(originalWidth, originalHeight);
@@ -134,10 +149,27 @@ function applyTextWithShrink(node, text, sourceText, allowShrink, minScaleInput)
                 node.y = originalY;
             }
             node.textAutoResize = originalAutoResize;
+            if (!rtlLocale) {
+                node.textAlignHorizontal = originalTextAlign;
+            }
         };
+        const fontOverride = getFontOverrideForLocale(locale);
+        if (fontOverride) {
+            yield loadFonts([fontOverride]);
+            node.fontName = fontOverride;
+        }
         node.characters = text;
         yield loadFontsForText(node);
         node.characters = text;
+        if (fontOverride && node.characters.length) {
+            node.setRangeFontName(0, node.characters.length, fontOverride);
+        }
+        if (rtlLocale) {
+            if (node.textAlignHorizontal === "LEFT") {
+                node.textAlignHorizontal = "RIGHT";
+            }
+        }
+        forceTextLayout(node, originalWidth, originalHeight, originalAutoResize);
         if (typeof node.fontSize !== "number") {
             finalize();
             return { shrunk: false, skipped: true };
@@ -237,6 +269,21 @@ function normalizeLocales(locales) {
             normalized: (_a = LOCALE_ALIASES[locale]) !== null && _a !== void 0 ? _a : locale,
         });
     });
+}
+function getLocaleKey(locale) {
+    if (!locale) {
+        return "";
+    }
+    return locale.trim().toLowerCase().split("-")[0];
+}
+function getFontOverrideForLocale(locale) {
+    var _a;
+    const key = getLocaleKey(locale);
+    return (_a = LOCALE_FONT_OVERRIDES[key]) !== null && _a !== void 0 ? _a : null;
+}
+function isRtlLocale(locale) {
+    const key = getLocaleKey(locale);
+    return RTL_LOCALES.has(key);
 }
 function callGemini(apiKey, model, prompt) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -445,7 +492,7 @@ function runLocalization(settings) {
                     for (let i = 0; i < length; i++) {
                         const sourceText = data.texts[i];
                         const translated = (_a = translations.get(sourceText)) !== null && _a !== void 0 ? _a : sourceText;
-                        const { shrunk, skipped } = yield applyTextWithShrink(cloneTextNodes[i], translated, sourceText, settings.shrinkText, settings.minShrinkScale);
+                        const { shrunk, skipped } = yield applyTextWithShrink(cloneTextNodes[i], translated, sourceText, settings.shrinkText, settings.minShrinkScale, localeInfo.normalized);
                         if (skipped) {
                             figma.ui.postMessage({
                                 type: "log",

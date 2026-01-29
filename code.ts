@@ -51,6 +51,13 @@ const LOCALE_ALIASES: Record<string, string> = {
   ca: "ca-ES",
 };
 
+const LOCALE_FONT_OVERRIDES: Record<string, FontName> = {
+  ar: { family: "Arial", style: "Regular" },
+  he: { family: "Arial", style: "Regular" },
+};
+
+const RTL_LOCALES = new Set(["ar", "he"]);
+
 const SETTINGS_KEY = "screenshot-localiser-settings";
 const loadedFonts = new Set<string>();
 
@@ -106,6 +113,20 @@ function isWithinInstance(node: SceneNode): boolean {
   return false;
 }
 
+function forceTextLayout(
+  node: TextNode,
+  originalWidth: number,
+  originalHeight: number,
+  originalAutoResize: TextNode["textAutoResize"]
+): void {
+  node.textAutoResize = "WIDTH_AND_HEIGHT";
+  node.characters = node.characters;
+  node.textAutoResize = originalAutoResize;
+  if (originalAutoResize === "NONE" || originalAutoResize === "HEIGHT") {
+    node.resizeWithoutConstraints(originalWidth, originalHeight);
+  }
+}
+
 async function loadFontsForNode(node: TextNode): Promise<void> {
   const segments = node.getStyledTextSegments(["fontName"]);
   const fonts = new Map<string, FontName>();
@@ -129,7 +150,8 @@ async function applyTextWithShrink(
   text: string,
   sourceText: string,
   allowShrink: boolean,
-  minScaleInput: number
+  minScaleInput: number,
+  locale?: string
 ): Promise<{ shrunk: boolean; skipped: boolean }> {
   await loadFontsForNode(node);
   const originalAutoResize = node.textAutoResize;
@@ -137,7 +159,9 @@ async function applyTextWithShrink(
   const originalY = node.y;
   const originalWidth = node.width;
   const originalHeight = node.height;
+  const originalTextAlign = node.textAlignHorizontal;
   const canSetPosition = !isWithinInstance(node);
+  const rtlLocale = isRtlLocale(locale);
   const finalize = () => {
     node.textAutoResize = "NONE";
     node.resizeWithoutConstraints(originalWidth, originalHeight);
@@ -146,11 +170,28 @@ async function applyTextWithShrink(
       node.y = originalY;
     }
     node.textAutoResize = originalAutoResize;
+    if (!rtlLocale) {
+      node.textAlignHorizontal = originalTextAlign;
+    }
   };
 
+  const fontOverride = getFontOverrideForLocale(locale);
+  if (fontOverride) {
+    await loadFonts([fontOverride]);
+    node.fontName = fontOverride;
+  }
   node.characters = text;
   await loadFontsForText(node);
   node.characters = text;
+  if (fontOverride && node.characters.length) {
+    node.setRangeFontName(0, node.characters.length, fontOverride);
+  }
+  if (rtlLocale) {
+    if (node.textAlignHorizontal === "LEFT") {
+      node.textAlignHorizontal = "RIGHT";
+    }
+  }
+  forceTextLayout(node, originalWidth, originalHeight, originalAutoResize);
 
   if (typeof node.fontSize !== "number") {
     finalize();
@@ -278,6 +319,23 @@ function normalizeLocales(locales: string[]): { raw: string; normalized: string 
     raw: locale,
     normalized: LOCALE_ALIASES[locale] ?? locale,
   }));
+}
+
+function getLocaleKey(locale: string | undefined): string {
+  if (!locale) {
+    return "";
+  }
+  return locale.trim().toLowerCase().split("-")[0];
+}
+
+function getFontOverrideForLocale(locale: string | undefined): FontName | null {
+  const key = getLocaleKey(locale);
+  return LOCALE_FONT_OVERRIDES[key] ?? null;
+}
+
+function isRtlLocale(locale: string | undefined): boolean {
+  const key = getLocaleKey(locale);
+  return RTL_LOCALES.has(key);
 }
 
 async function callGemini(
@@ -546,7 +604,8 @@ async function runLocalization(settings: PluginSettings): Promise<void> {
             translated,
             sourceText,
             settings.shrinkText,
-            settings.minShrinkScale
+            settings.minShrinkScale,
+            localeInfo.normalized
           );
           if (skipped) {
             figma.ui.postMessage({
