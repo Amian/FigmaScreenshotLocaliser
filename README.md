@@ -35,7 +35,7 @@ Perfect for design teams who need to validate or showcase their UI in multiple l
 ## Requirements
 
 - Figma desktop app (or Figma in browser)
-- [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier works great)
+- **Google Gemini API key** — required for translation. Get one free at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) (no credit card needed)
 - Node.js + npm (for local development/building only)
 
 ---
@@ -49,7 +49,7 @@ Perfect for design teams who need to validate or showcase their UI in multiple l
 
 1. **Clone the repo**
    ```bash
-   git clone https://github.com/anumdev/FigmaScreenshotLocaliser.git
+   git clone https://github.com/Amian/FigmaScreenshotLocaliser.git
    cd FigmaScreenshotLocaliser
    ```
 
@@ -74,24 +74,54 @@ Perfect for design teams who need to validate or showcase their UI in multiple l
 
 ---
 
+## Setting up your Figma file
+
+For the plugin to work correctly, **text layers must use Auto Layout** so they can dynamically resize when translated content expands or contracts. Fixed-size text boxes that don't resize will cause translations to overflow or get clipped.
+
+**→ Use this ready-made template with correct Auto Layout settings already configured:**
+[Figma Screenshot Template](https://www.figma.com/design/l2hlLNVpX4zo0MN7Vwglez/Screenshot-Template?node-id=0-1&t=dmw6pfTBhHqIkfjx-1)
+
+You can duplicate this template into your project as a starting point, or use it as a reference when setting up your own frames.
+
+### Auto Layout requirements
+
+- Text containers should use **Auto Layout** (Hug contents or Fill) rather than fixed dimensions
+- Frames should be set to **Hug** their content vertically so they grow with the text
+- Avoid fixed-height text boxes unless paired with the auto-shrink option enabled in the plugin
+
+---
+
+## Getting a Gemini API key
+
+The plugin uses Google Gemini to translate text. The free tier is more than sufficient for most use cases.
+
+1. Go to [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+2. Sign in with a Google account
+3. Click **"Create API key"**
+4. Copy the key and paste it into the plugin settings
+
+No credit card is required for the free tier.
+
+---
+
 ## Usage
 
-1. **Select frames** in Figma that contain the text you want to localize
-2. **Open the plugin** via Plugins → Development → ScreenshotLocaliser
-3. **Configure settings:**
+1. **Set up your frames** with Auto Layout text layers (see above, or use the [template](https://www.figma.com/design/l2hlLNVpX4zo0MN7Vwglez/Screenshot-Template?node-id=0-1&t=dmw6pfTBhHqIkfjx-1))
+2. **Select frames** in Figma that contain the text you want to localize
+3. **Open the plugin** via Plugins → Development → ScreenshotLocaliser
+4. **Configure settings:**
    - Paste your **Gemini API key**
    - Choose a **model** (default: `gemini-2.5-flash`)
    - Enter **target locales** — one per line or comma-separated (e.g. `fr, de, ja, ar`)
    - Set **export format** (PNG or JPG) and **scale** (1×–4×)
    - Toggle options: *Keep translated duplicates*, *Auto-shrink text*, *Download ZIP*
-4. **Click "Translate & Export"** and watch the progress bar
-5. **Download your ZIP** — each locale gets its own folder
+5. **Click "Translate & Export"** and watch the progress bar
+6. **Download your ZIP** — each locale gets its own folder
 
 ### Tips
 
 - You can use **locale aliases**: `pt` → `pt-PT`, `ca` → `ca-ES`
-- For best results, use frames with auto-layout or fixed-size text boxes
-- The **minimum shrink scale** (default 0.7) controls how aggressively text shrinks — set to 1.0 to disable shrinking
+- The **minimum shrink scale** (default 0.7) controls how aggressively text shrinks — set to 1.0 to disable shrinking entirely
 - Enable **Keep translated duplicates** to keep the localized frames in a "Localized Screenshots" page for review
 
 ---
