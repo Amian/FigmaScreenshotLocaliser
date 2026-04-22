@@ -6,155 +6,299 @@
     <style>
       :root {
         color-scheme: light;
+        --bg: #ffffff;
+        --bg-secondary: #f5f5f5;
+        --border: #e0e0e0;
+        --text: #111111;
+        --text-secondary: #717171;
+        --accent: #111111;
+        --accent-hover: #333333;
+        --input-bg: #ffffff;
+        --radius: 6px;
+      }
+      * {
+        box-sizing: border-box;
       }
       body {
-        font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
         margin: 0;
-        padding: 16px;
-        background: #f7f4ef;
-        color: #1f1f1f;
+        padding: 20px;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.4;
       }
       h2 {
-        margin: 0 0 12px;
+        margin: 0 0 20px;
         font-weight: 600;
-        font-size: 18px;
+        font-size: 15px;
+        letter-spacing: -0.01em;
       }
+
+      /* --- Sections --- */
+      .section {
+        margin-bottom: 16px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        margin: 0 0 8px;
+      }
+
+      /* --- Form elements --- */
       label {
         display: block;
         font-size: 12px;
-        font-weight: 600;
-        margin: 12px 0 6px;
+        font-weight: 500;
+        margin: 0 0 4px;
+        color: var(--text);
       }
-      input,
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
       textarea,
       select {
         width: 100%;
-        box-sizing: border-box;
-        padding: 8px 10px;
-        border: 1px solid #d2c8bb;
-        border-radius: 8px;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
         font-size: 12px;
-        background: #fffaf2;
+        background: var(--input-bg);
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      input[type="text"]:focus,
+      input[type="password"]:focus,
+      input[type="number"]:focus,
+      textarea:focus,
+      select:focus {
+        border-color: #999;
       }
       textarea {
-        min-height: 84px;
+        min-height: 72px;
         resize: vertical;
+        font-family: inherit;
       }
+      select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        padding-right: 28px;
+      }
+
+      /* --- Field group (label + input) --- */
+      .field {
+        margin-bottom: 12px;
+      }
+      .field:last-child {
+        margin-bottom: 0;
+      }
+
+      /* --- Row layout --- */
       .row {
         display: flex;
         gap: 10px;
       }
-      .row > div {
+      .row > .field {
         flex: 1;
       }
+
+      /* --- Toggle rows (checkbox options) --- */
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--bg-secondary);
+      }
+      .toggle-row:last-child {
+        border-bottom: none;
+      }
+      .toggle-row label {
+        margin: 0;
+        font-weight: 400;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .toggle-row input[type="checkbox"] {
+        width: auto;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .toggle-row input[type="number"] {
+        width: 64px;
+        text-align: center;
+        padding: 4px 6px;
+        font-size: 11px;
+      }
+
+      /* --- Divider --- */
+      .divider {
+        height: 1px;
+        background: var(--border);
+        margin: 16px 0;
+      }
+
+      /* --- Note --- */
       .note {
         font-size: 11px;
-        color: #5a5248;
-        margin-top: 6px;
+        color: var(--text-secondary);
+        margin: 12px 0 0;
       }
+
+      /* --- Actions --- */
       .actions {
         display: flex;
-        gap: 10px;
-        margin-top: 14px;
+        gap: 8px;
+        margin-top: 16px;
       }
       button {
         flex: 1;
-        border: 0;
-        border-radius: 8px;
-        padding: 10px 12px;
-        font-weight: 600;
+        border: none;
+        border-radius: var(--radius);
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 500;
         cursor: pointer;
+        transition: background 0.15s, opacity 0.15s;
       }
       button.primary {
-        background: #1f1f1f;
-        color: #fff4e3;
+        background: var(--accent);
+        color: #fff;
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
       }
       button.secondary {
-        background: #e4dccf;
-        color: #3e352a;
+        background: var(--bg-secondary);
+        color: var(--text);
+      }
+      button.secondary:hover {
+        background: #eaeaea;
       }
       button:disabled {
-        opacity: 0.6;
+        opacity: 0.4;
         cursor: not-allowed;
       }
+
+      /* --- Status --- */
       .status {
         margin-top: 16px;
-        padding: 10px 12px;
-        background: #fffaf2;
-        border: 1px solid #d2c8bb;
-        border-radius: 8px;
+        padding: 8px 10px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius);
         font-size: 12px;
-        min-height: 36px;
+        color: var(--text-secondary);
+        min-height: 32px;
+        display: flex;
+        align-items: center;
       }
       progress {
         width: 100%;
-        height: 10px;
+        height: 4px;
         margin-top: 8px;
+        border-radius: 2px;
+        overflow: hidden;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+      progress::-webkit-progress-bar {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+      }
+      progress::-webkit-progress-value {
+        background: var(--accent);
+        border-radius: 2px;
+        transition: width 0.2s ease;
       }
       .log {
-        margin-top: 10px;
+        margin-top: 8px;
         font-size: 11px;
-        color: #5a5248;
-        max-height: 120px;
+        color: var(--text-secondary);
+        max-height: 100px;
         overflow: auto;
         white-space: pre-wrap;
+        font-family: "SF Mono", "Fira Code", monospace;
+        line-height: 1.5;
       }
     </style>
   </head>
   <body>
     <h2>Screenshot Localiser</h2>
 
-    <label for="apiKey">Gemini API key</label>
-    <input id="apiKey" type="password" placeholder="Paste your key" />
-
-    <label for="model">Model</label>
-    <input id="model" type="text" placeholder="gemini-2.5-flash" />
-
-    <label for="locales">Locales (comma or line separated)</label>
-    <textarea id="locales"></textarea>
-
-    <div class="row">
-      <div>
-        <label for="format">Export format</label>
-        <select id="format">
-          <option value="PNG">PNG</option>
-          <option value="JPG">JPG</option>
-        </select>
+    <div class="section">
+      <div class="section-title">API</div>
+      <div class="field">
+        <label for="apiKey">Gemini API key</label>
+        <input id="apiKey" type="password" placeholder="Paste your key" />
       </div>
-      <div>
-        <label for="scale">Scale</label>
-        <input id="scale" type="number" min="1" max="4" step="0.5" value="1" />
+      <div class="field">
+        <label for="model">Model</label>
+        <input id="model" type="text" placeholder="gemini-2.5-flash" />
       </div>
     </div>
 
-    <div class="row">
-      <label for="keep-duplicates">Keep translated duplicates</label>
-      <input id="keep-duplicates" type="checkbox" />
+    <div class="section">
+      <div class="section-title">Locales</div>
+      <div class="field">
+        <label for="locales">Target locales (comma or line separated)</label>
+        <textarea id="locales"></textarea>
+      </div>
     </div>
-    <div class="row">
-      <label for="shrink-text">Shrink text to fit</label>
-      <input id="shrink-text" type="checkbox" checked />
+
+    <div class="section">
+      <div class="section-title">Export</div>
+      <div class="row">
+        <div class="field">
+          <label for="format">Format</label>
+          <select id="format">
+            <option value="PNG">PNG</option>
+            <option value="JPG">JPG</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="scale">Scale</label>
+          <input id="scale" type="number" min="1" max="4" step="0.5" value="1" />
+        </div>
+      </div>
     </div>
-    <div class="row">
-      <label for="min-shrink-scale">Minimum shrink scale</label>
-      <input
-        id="min-shrink-scale"
-        type="number"
-        min="0.1"
-        max="1"
-        step="0.05"
-        value="0.7"
-      />
-    </div>
-    <div class="row">
-      <label for="download-zip">Download ZIP</label>
-      <input id="download-zip" type="checkbox" checked />
+
+    <div class="section">
+      <div class="section-title">Options</div>
+      <div class="toggle-row">
+        <label for="keep-duplicates">Keep translated duplicates</label>
+        <input id="keep-duplicates" type="checkbox" />
+      </div>
+      <div class="toggle-row">
+        <label for="shrink-text">Shrink text to fit</label>
+        <input id="shrink-text" type="checkbox" checked />
+      </div>
+      <div class="toggle-row">
+        <label for="min-shrink-scale">Minimum shrink scale</label>
+        <input
+          id="min-shrink-scale"
+          type="number"
+          min="0.1"
+          max="1"
+          step="0.05"
+          value="0.7"
+        />
+      </div>
+      <div class="toggle-row">
+        <label for="download-zip">Download ZIP</label>
+        <input id="download-zip" type="checkbox" checked />
+      </div>
     </div>
 
     <div class="note">Select the frames you want to localize before running.</div>
 
     <div class="actions">
-      <button id="start" class="primary">Translate &amp; Export</button>
+      <button id="start" class="primary">Translate & Export</button>
       <button id="close" class="secondary">Close</button>
     </div>
 
