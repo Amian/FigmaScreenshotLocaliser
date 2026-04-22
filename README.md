@@ -1,6 +1,6 @@
 # Figma Screenshot Localiser
 
-A Figma plugin that automatically translates UI text and exports localized screenshots across multiple languages — all in one click.
+A Figma plugin for app developers that automatically translates UI text and exports localized screenshots across multiple languages — all in one click.
 
 ![Figma Plugin](https://img.shields.io/badge/Figma-Plugin-F24E1E?logo=figma&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)
@@ -16,7 +16,7 @@ Select any Figma frames, pick your target locales, and the plugin will:
 2. **Shrink** text intelligently so translations fit the original layout (no overflow)
 3. **Export** localized screenshots as a neatly organized ZIP file
 
-Perfect for design teams who need to validate or showcase their UI in multiple languages without manually copy-pasting translations into every frame.
+Perfect for app developers who need to generate App Store or Play Store screenshots in multiple languages without manually copying translations into every frame.
 
 ---
 
@@ -25,7 +25,7 @@ Perfect for design teams who need to validate or showcase their UI in multiple l
 - **AI-powered translations** via Google Gemini (free tier available)
 - **Smart text shrinking** — when a translation is longer than the original, the plugin automatically scales down font size to fit the bounds, preserving line wrapping and proportional line-height
 - **RTL language support** — automatically flips text alignment for Arabic, Hebrew, etc.
-- **32 locales by default** — `ar, ca, cs, da, de, el, es, fi, fr, he, hi, hr, hu, id, it, ja, ko, ms, nl, no, pl, pt, pt-BR, ro, ru, sk, sv, th, tr, uk, vi, zh-CN, zh-TW`
+- **28 locales by default** — `ar, ca, cs, da, de, el, es, fi, fr, he, hr, hu, id, it, ms, nl, no, pl, pt, pt-BR, ro, ru, sk, sv, tr, uk, vi, zh-TW`
 - **Flexible export** — PNG or JPG at 1×–4× scale
 - **ZIP download** — organized by locale (`/fr/Frame.png`, `/ja/Frame.png`, etc.)
 - **Settings persistence** — your API key, model, and preferences are saved locally in Figma
